@@ -19,6 +19,6 @@ class XXX(Strategy):
 
 
 
-#bt = Backtest( #Stock , #Strategy , cash=10_000, commission=.002)
-#stats = bt.run()
-#stats
+bt = Backtest( #Stock , #Strategy , cash=10_000, commission=.002)
+stats = bt.run()
+stats
