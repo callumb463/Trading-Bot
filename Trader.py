@@ -1,24 +1,38 @@
 import yfinance as yf
 import pandas as pd
+import numpy as np
 from backtesting import Strategy
 from backtesting import Backtest
+from backtesting.test import GOOG
 
 dataF=yf.download('SPY', period='5y')
-print(dataF)
+if isinstance(dataF.columns, pd.MultiIndex):
+        dataF.columns = dataF.columns.get_level_values(0)
 
-class XXX(Strategy):
+print(GOOG.head())
+print(dataF.head())
+
+def closing(data):
+    return pd.Series(data)
+
+class BB(Strategy):
 
     def init(self):
-        #Any functions (indicators) need to be initialised with self.#indicator# = self.I(#function#, #data#)
-        return
+        self.close = self.I(closing, self.data.Close)
 
     def next(self):
         #Actual strategy if x: buy, elif y: sell
-        return
+        if self.close[-1] < self.close[-2]:
+            self.position.close()
+            self.buy()
+        if self.close[-1] > self.close[-2]:
+            self.position.close()
+            self.sell()
 
 
 
 
-bt = Backtest( #Stock , #Strategy , cash=10_000, commission=.002)
+bt = Backtest(dataF, BB, cash=10_000, commission=0.0)
 stats = bt.run()
-stats
+print(stats)
+bt.plot()
