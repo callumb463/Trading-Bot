@@ -20,7 +20,7 @@ def EWM(data, n):
      return pd.Series(data).ewm(span=n, adjust=True).mean()
      
 
-class Golden_Setup(Strategy):
+class golden_setup(Strategy):
     short_EWM_span = 50
     long_EWM_span = 200
 
@@ -44,7 +44,7 @@ class Golden_Setup(Strategy):
 
 
 
-bt = Backtest(dataF, Golden_Setup, cash=10_000, commission=0.0)
+bt = Backtest(dataF, golden_setup, cash=10_000, commission=0.0)
 stats = bt.run()
 print(stats)
 bt.plot()
