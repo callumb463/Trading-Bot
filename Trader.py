@@ -4,6 +4,7 @@ import numpy as np
 from backtesting import Strategy
 from backtesting import Backtest
 from backtesting.test import GOOG
+from backtesting.lib import crossover
 
 dataF=yf.download('SPY', period='5y')
 if isinstance(dataF.columns, pd.MultiIndex):
@@ -15,19 +16,30 @@ print(dataF.head())
 def closing(data):
     return pd.Series(data)
 
+def EWM(data, n):
+     return pd.Series(data).ewm(span=n, adjust=True).mean()
+     
+
 class BB(Strategy):
+    short_EWM_span = 50
+    long_EWM_span = 200
+
 
     def init(self):
-        self.close = self.I(closing, self.data.Close)
+        self.short_EWM = self.I(EWM, self.data.Close, self.short_EWM_span)
+        self.long_EWM = self.I(EWM, self.data.Close, self.long_EWM_span)
 
     def next(self):
         #Actual strategy if x: buy, elif y: sell
-        if self.close[-1] < self.close[-2]:
-            self.position.close()
-            self.buy()
-        if self.close[-1] > self.close[-2]:
-            self.position.close()
-            self.sell()
+        try:
+            if self.short_EWM[-1] > self.long_EWM[-1] or crossover(self.short_EWM[-1], self.longEWM[-1]):
+                self.position.close()
+                self.buy()
+            elif self.short_EWM[-1] < self.long_EWM[-1]:
+                self.position.close()
+                self.sell()
+        except:
+             return
 
 
 
