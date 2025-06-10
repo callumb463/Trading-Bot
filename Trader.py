@@ -59,7 +59,7 @@ class golden_setup(Strategy):
         #Actual strategy if x: buy, elif y: sell
         #RSI Strategy: buy (stock=lower lows + RSI=comparitive higher lows) / sell (stock higher highs + RSI=comparative lower highs)
         try:
-            if crossover(self.short_EWM[-1], self.long_EWM[-1]) or self.short_EWM[-1] > self.long_EWM[-1] and np.diff(self.short_EWM, prepend=0)[-1] > np.diff(self.long_EWM, prepend=0)[-1] or crossover(self.RSI[-1], 30):
+            if crossover(self.short_EWM[-1], self.long_EWM[-1]) or self.short_EWM[-1] > self.long_EWM[-1] and np.diff(self.short_EWM, prepend=0)[-1] > np.diff(self.long_EWM, prepend=0)[-1]:
                 self.position.close()
                 self.buy()
             elif self.short_EWM[-1] < self.long_EWM[-1]:
