@@ -1,6 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 from backtesting import Strategy
 from backtesting import Backtest
 from backtesting.test import GOOG
@@ -21,41 +22,44 @@ def closing(data):
 def EWM(data, n):
      return pd.Series(data).ewm(span=n, adjust=True).mean()
      
-def RSI(dataF, days):
-    positive=delta.copy()
-    negative=delta.copy()
+# def RSI(dataF, days):
+#     delta = dataF.Close.diff(1)
+#     delta.dropna(inplace=True)
+#     positive=delta.copy()
+#     negative=delta.copy()
 
-    positive[positive < 0] = 0
-    negative[negative > 0] = 0
+#     positive[positive < 0] = 0
+#     negative[negative > 0] = 0
 
-    days = 14
+#     days = 14
 
-    average_gain = positive.rolling(window=days).mean()
-    average_loss = abs(negative.rolling(window=days).mean())
-    relative_strength = average_gain/average_loss
+#     average_gain = positive.rolling(window=days).mean()
+#     average_loss = abs(negative.rolling(window=days).mean())
+#     relative_strength = average_gain/average_loss
 
-    RSI_var = 100 - (100 / (1 + relative_strength))
+#     RSI_var = 100 - (100 / (1 + relative_strength))
 
-    combined = pd.DataFrame()
-    combined['RSI'] = RSI_var
+#     combined = pd.DataFrame()
+#     combined['RSI'] = RSI_var
 
-    return pd.Series(RSI_var)
+#     return pd.Series(RSI_var)
 
 class golden_setup(Strategy):
-    RSI_span = 14
+    # RSI_span = 14
     short_EWM_span = 50
     long_EWM_span = 200
 
 
     def init(self):
-        self.RSI = self.I(RSI, self.data, self.RSI_span)
+        # self.RSI = self.I(RSI, self.data, self.RSI_span)
         self.short_EWM = self.I(EWM, self.data.Close, self.short_EWM_span)
         self.long_EWM = self.I(EWM, self.data.Close, self.long_EWM_span)
 
     def next(self):
         #Actual strategy if x: buy, elif y: sell
+        #RSI Strategy: buy (stock=lower lows + RSI=comparitive higher lows) / sell (stock higher highs + RSI=comparative lower highs)
         try:
-            if self.short_EWM[-1] > self.long_EWM[-1] or crossover(self.short_EWM[-1], self.longEWM[-1]) or crossover(self.RSI[-1], 30):
+            if crossover(self.short_EWM[-1], self.long_EWM[-1]) or self.short_EWM[-1] > self.long_EWM[-1] and np.diff(self.short_EWM, prepend=0)[-1] > np.diff(self.long_EWM, prepend=0)[-1] or crossover(self.RSI[-1], 30):
                 self.position.close()
                 self.buy()
             elif self.short_EWM[-1] < self.long_EWM[-1]:
