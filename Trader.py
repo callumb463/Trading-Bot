@@ -6,7 +6,7 @@ from backtesting import Backtest
 from backtesting.test import GOOG
 from backtesting.lib import crossover
 
-dataF=yf.download('AAPL', period='5y')
+dataF=yf.download('SPY', period='5y')
 if isinstance(dataF.columns, pd.MultiIndex):
         dataF.columns = dataF.columns.get_level_values(0)
 
@@ -33,6 +33,9 @@ def RSI(data, days):
 
     return pd.Series(RSI_var)
      
+
+
+
 class golden_setup(Strategy):
     RSI_span = 14
     short_EWM_span = 50
@@ -47,10 +50,10 @@ class golden_setup(Strategy):
     def next(self):
         #EACH POSITION IS AN INSTANCE OF CLASS. JUST CREATE NEW ONES
         EWM_condition = crossover(self.short_EWM[-1], self.long_EWM[-1]) and np.diff(self.short_EWM, prepend=0)[-1] > np.diff(self.long_EWM, prepend=0)[-1]
-        if  self.short_EWM[-1] < self.long_EWM[-1] or EWM_condition or crossover(self.RSI[-1], 30):
+        if  self.short_EWM[-1] > self.long_EWM[-1] or EWM_condition or crossover(self.RSI[-1], 30):
                 self.buy(size=2)
                 
-        elif self.short_EWM[-1] > self.long_EWM[-1]:# or crossover(70, self.RSI[-1]):
+        elif self.short_EWM[-1] < self.long_EWM[-1]:# or crossover(70, self.RSI[-1]):
                 self.position.close()
 
 bt = Backtest(dataF, golden_setup, cash=10_000, commission=0.0,exclusive_orders=False)
