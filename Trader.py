@@ -2,7 +2,6 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import sambo
-import matplotlib.pyplot as plt
 from sambo.plot import plot_objective
 from backtesting import Strategy
 from backtesting import Backtest
