@@ -2,13 +2,14 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import sambo
+import matplotlib.pyplot as plt
 from sambo.plot import plot_objective
 from backtesting import Strategy
 from backtesting import Backtest
 from backtesting.test import GOOG
 from backtesting.lib import crossover
 
-dataF=yf.download('SBUX', period='5y')
+dataF=yf.download('SPY', period='5y')
 if isinstance(dataF.columns, pd.MultiIndex):
         dataF.columns = dataF.columns.get_level_values(0)
 
@@ -35,16 +36,36 @@ def RSI(data, days):
 
     return pd.Series(RSI_var)
 
+def trendline_intersect(data, short_EWM, long_EWM, days, intersect_distance):
+    x = np.array(range(0,days))
+    trend_buys = [0]*days
+    for i in range(days,len(data)):
+        short_coef = np.polyfit(x, short_EWM[i-days:i],1)
+        long_coef = np.polyfit(x, long_EWM[i-days:i],1)
+        correlation = np.corrcoef(x, short_EWM[i-days:i])[0,1]
+        if short_coef[0] != long_coef[0]:
+            intersection = abs((long_coef[1]-short_coef[1])/(long_coef[0]-short_coef[0]))
+
+        if intersection <= days+intersect_distance and intersection > 1 and short_EWM[i] > long_EWM[i] and correlation**2 >0.99:
+            trend_buys.append(True)
+        else:
+            trend_buys.append(False)
+    return trend_buys
+    
+     
+     
+
 
 
 class golden_setup(Strategy):
-    RSI_buy_weight = 154
-    RSI_sell_weight = 20
-    EWM_buy_weight = 186
-    EWM_sell_weight = 162
+    RSI_buy_weight = 155
+    RSI_sell_weight = 51
+    EWM_buy_weight = 187
+    EWM_sell_weight = 163
+    trend_weight = 20
 
-
-
+    intersect_dist = 40
+    trend_length = 15
     RSI_span = 13
     RSI_upper = 80
     RSI_lower = 20
@@ -57,31 +78,32 @@ class golden_setup(Strategy):
         self.RSI = self.I(RSI, self.data.Close, self.RSI_span)
         self.short_EWM = self.I(EWM, self.data.Close, self.short_EWM_span)
         self.long_EWM = self.I(EWM, self.data.Close, self.long_EWM_span)
+        self.trend = self.I(trendline_intersect, self.data.Close, self.short_EWM, self.long_EWM, self.trend_length, self.intersect_dist)
 
     def next(self):
         EWM_condition =  self.short_EWM[-1] > self.long_EWM[-1] and np.diff(self.short_EWM, prepend=0)[-1] > np.diff(self.long_EWM, prepend=0)[-1]
         RSI_buy = self.RSI[-1] < self.RSI_lower and np.mean(np.diff(self.data.Close,prepend=0)[-self.n:-1]) < 0 and np.diff(self.RSI, prepend=0)[-1] > 0
         RSI_sell = self.RSI[-1] > self.RSI_upper and np.mean(np.diff(self.data.Close,prepend=0)[-self.n:-1]) > 0 and np.diff(self.RSI, prepend=0)[-1] < 0
-        RSI_score = np.dot([np.diff(self.RSI, prepend=0)[-1], 1]/np.linalg.norm([np.diff(self.RSI, prepend=0)[-1], 1]),[np.mean(np.diff(self.data.Close,prepend=0)[-self.n:-1]),1]/np.linalg.norm([np.mean(np.diff(self.data.Close,prepend=0)[-self.n:-1]),1]))
+        RSI_score = abs(np.dot([np.diff(self.RSI, prepend=0)[-1], 1]/np.linalg.norm([np.diff(self.RSI, prepend=0)[-1], 1]),[np.mean(np.diff(self.data.Close,prepend=0)[-self.n:-1]),1]/np.linalg.norm([np.mean(np.diff(self.data.Close,prepend=0)[-self.n:-1]),1])))
 
-        condition = self.EWM_buy_weight*(EWM_condition+(crossover(self.short_EWM[-1], self.long_EWM[-1]))) - self.EWM_sell_weight*(self.short_EWM[-1] < self.long_EWM[-1]) + self.RSI_buy_weight*RSI_score*RSI_buy - self.RSI_sell_weight*RSI_score*RSI_sell
+        condition = self.EWM_buy_weight*(EWM_condition+(crossover(self.short_EWM[-1], self.long_EWM[-1]))) - self.EWM_sell_weight*(self.short_EWM[-1] < self.long_EWM[-1]) + self.RSI_buy_weight*RSI_score*RSI_buy - self.RSI_sell_weight*RSI_score*RSI_sell - self.trend_weight*self.trend
         #RSI IS NOW PROPERLY IMPLEMENTED BUT BECAUSE WE STILL BUY EVERYTHING WAY TO QUICKLY IT'S EFFECTS CANNOT BE SEEN
         if condition>=100:
                 self.buy(size=1)
                 
-        elif condition<0:
+        elif condition<-1:
                 self.position.close()
 
-bt = Backtest(dataF, golden_setup, cash=10_000, commission=0.0,exclusive_orders=False,finalize_trades=True)
+bt = Backtest(dataF, golden_setup, cash=10_000, commission=0.0,exclusive_orders=False,finalize_trades=False)
 stats = bt.run()
 print(stats)
 bt.plot()
 
 #stats, heatmap, optimize_result = bt.optimize(
-#    RSI_upper = [50,100],
-#    RSI_lower = [0,50],
-#    short_EWM_span = [0,100],
-#    long_EWM_span = [100,300],
+#    RSI_buy_weight = [0,200],
+#    RSI_sell_weight = [0,200],
+#    EWM_buy_weight = [0,200],
+#    EWM_sell_weight = [0,200],
 #    n = [0,10],
 #    maximize='Equity Final [$]',
 #    method='sambo',
