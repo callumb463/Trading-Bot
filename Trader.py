@@ -44,16 +44,20 @@ def trendline_intersect(data, short_EWM, long_EWM, days, intersect_distance):
         long_coef = np.polyfit(x, long_EWM[i-days:i],1)
         correlation = np.corrcoef(x, short_EWM[i-days:i])[0,1]
         if short_coef[0] != long_coef[0]:
-            intersection = abs((long_coef[1]-short_coef[1])/(long_coef[0]-short_coef[0]))
+            intersection = -1*(long_coef[1]-short_coef[1])/(long_coef[0]-short_coef[0])
 
-        if intersection <= days+intersect_distance and intersection > 1 and short_EWM[i] > long_EWM[i] and correlation**2 >0.99:
+        if intersection <= days+intersect_distance and intersection > 1 and short_EWM[i] > long_EWM[i] and correlation**2 >0.95:
             trend_buys.append(True)
         else:
             trend_buys.append(False)
     return trend_buys
     
-     
-     
+
+##SELL IF WE ARE A FEW STANDARD DEV ABOVE TYPICAL RETURN SELL [A LOT MORE RESEARCH BECAUSE WE COULD JUST BE MISSING OUT ON MONEY]
+
+
+##BUY ONLY IF EWM SHORT GREATER THAN EWM LONG BY SOME MARGIN (1%) OR IF WE ARE QUITE FAR BELOW (~3%)
+##TAKE INTO ACCOUNT SLOPE OF CROSSING OF EWM'S WHEN DETERMINING MARGIN
 
 
 
@@ -81,15 +85,15 @@ class golden_setup(Strategy):
         self.trend = self.I(trendline_intersect, self.data.Close, self.short_EWM, self.long_EWM, self.trend_length, self.intersect_dist)
 
     def next(self):
-        EWM_condition =  self.short_EWM[-1] > self.long_EWM[-1] and np.diff(self.short_EWM, prepend=0)[-1] > np.diff(self.long_EWM, prepend=0)[-1]
+        EWM_condition =  self.short_EWM[-1] > self.long_EWM[-1]+0.5 and np.diff(self.short_EWM, prepend=0)[-1] > np.diff(self.long_EWM, prepend=0)[-1]
         RSI_buy = self.RSI[-1] < self.RSI_lower and np.mean(np.diff(self.data.Close,prepend=0)[-self.n:-1]) < 0 and np.diff(self.RSI, prepend=0)[-1] > 0
         RSI_sell = self.RSI[-1] > self.RSI_upper and np.mean(np.diff(self.data.Close,prepend=0)[-self.n:-1]) > 0 and np.diff(self.RSI, prepend=0)[-1] < 0
-        RSI_score = abs(np.dot([np.diff(self.RSI, prepend=0)[-1], 1]/np.linalg.norm([np.diff(self.RSI, prepend=0)[-1], 1]),[np.mean(np.diff(self.data.Close,prepend=0)[-self.n:-1]),1]/np.linalg.norm([np.mean(np.diff(self.data.Close,prepend=0)[-self.n:-1]),1])))
+        #RSI_score = abs(np.dot([np.diff(self.RSI, prepend=0)[-1], 1]/np.linalg.norm([np.diff(self.RSI, prepend=0)[-1], 1]),[np.mean(np.diff(self.data.Close,prepend=0)[-self.n:-1]),1]/np.linalg.norm([np.mean(np.diff(self.data.Close,prepend=0)[-self.n:-1]),1])))
 
-        condition = self.EWM_buy_weight*(EWM_condition+(crossover(self.short_EWM[-1], self.long_EWM[-1]))) - self.EWM_sell_weight*(self.short_EWM[-1] < self.long_EWM[-1]) + self.RSI_buy_weight*RSI_score*RSI_buy - self.RSI_sell_weight*RSI_score*RSI_sell - self.trend_weight*self.trend
+        condition = self.EWM_buy_weight*(EWM_condition+(crossover(self.short_EWM[-1], self.long_EWM[-1]))) - self.EWM_sell_weight*(self.short_EWM[-1]+0.5 < self.long_EWM[-1]) + self.RSI_buy_weight*RSI_buy - self.RSI_sell_weight*RSI_sell - self.trend_weight*(self.trend[-1])
         #RSI IS NOW PROPERLY IMPLEMENTED BUT BECAUSE WE STILL BUY EVERYTHING WAY TO QUICKLY IT'S EFFECTS CANNOT BE SEEN
         if condition>=100:
-                self.buy(size=1)
+                self.buy(size=0.33)
                 
         elif condition<-1:
                 self.position.close()
