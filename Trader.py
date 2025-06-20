@@ -46,7 +46,7 @@ def trendline_intersect(data, short_EWM, long_EWM, days, intersect_distance):
         if short_coef[0] != long_coef[0]:
             intersection = -1*(long_coef[1]-short_coef[1])/(long_coef[0]-short_coef[0])
 
-        if correlation**2 > 0.95 and intersection <= days+intersect_distance and intersection > 1 and short_EWM[i] > long_EWM[i]:
+        if correlation**2 > 0.98 and intersection <= days+intersect_distance and intersection > 1 and long_coef[0] > short_coef[0]:
             trend_buys.append(True)
         else:
             trend_buys.append(False)
