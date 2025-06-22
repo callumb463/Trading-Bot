@@ -9,13 +9,11 @@ from backtesting import Backtest
 from backtesting.test import GOOG
 from backtesting.lib import crossover
 
-dataF=yf.download('GC=F', period='5y')
-if isinstance(dataF.columns, pd.MultiIndex):
-        dataF.columns = dataF.columns.get_level_values(0)
 
+tickers = ['SPY','AAPL','GLW']
+start_cash = 10_000
 
-def closing(data):
-    return pd.Series(data)
+dataF=yf.download(tickers, period='5y')
 
 def EWM(data, n):
      return pd.Series(data).ewm(span=n, adjust=True).mean()
@@ -46,7 +44,7 @@ def trendline_intersect(data, short_EWM, long_EWM, days, intersect_distance):
         if short_coef[0] != long_coef[0]:
             intersection = -1*(long_coef[1]-short_coef[1])/(long_coef[0]-short_coef[0])
 
-        if correlation**2 > 0.98 and intersection <= days+intersect_distance and intersection > 1 and long_coef[0] > short_coef[0]:
+        if intersection <= days+intersect_distance and intersection > 0 and long_coef[0] > short_coef[0] and correlation**2 > 0.98:
             trend_buys.append(True)
         else:
             trend_buys.append(False)
@@ -70,7 +68,7 @@ def EWM_gap(data, short_EWM, long_EWM, up_percent, down_percent):
 
 
 class golden_setup(Strategy):
-    RSI_buy_weight = 0#155
+    RSI_buy_weight = 155
     RSI_sell_weight = 51
     EWM_buy_weight = 187
     EWM_sell_weight = 163
@@ -111,15 +109,32 @@ class golden_setup(Strategy):
         condition = self.EWM_buy_weight*(EWM_buy+(crossover(self.short_EWM, self.long_EWM))) - self.EWM_sell_weight*crossover(self.long_EWM,self.short_EWM) + self.RSI_buy_weight*RSI_buy - self.RSI_sell_weight*RSI_sell - self.trend_weight*(self.trend[-1])+self.EWM_buy_weight*EWM_below
         #RSI IS NOW PROPERLY IMPLEMENTED BUT BECAUSE WE STILL BUY EVERYTHING WAY TO QUICKLY IT'S EFFECTS CANNOT BE SEEN
         if condition>=100:
-                self.buy(size=0.33)
+                self.buy(size=0.99)
                 
         elif condition<-1:
                 self.position.close()
 
-bt = Backtest(dataF, golden_setup, cash=10_000, commission=0.0,exclusive_orders=False,finalize_trades=False)
-stats = bt.run()
+
+#LOOP OVER ALL STOCKS
+stats = []
+for ticker in tickers:
+    ticker_data = dataF.xs(ticker,axis=1,level=1)
+    bt = Backtest(ticker_data, golden_setup, cash=start_cash/len(tickers), commission=0.0,exclusive_orders=False,finalize_trades=True)
+    ticker_stats = bt.run()
+    stats.append(ticker_stats)
+    bt.plot()
 print(stats)
-bt.plot()
+
+#PRINT FINAL STOCKS
+equity = 0
+hold_equity = 0
+for n in range(len(tickers)):
+    equity += stats[n].iloc[4]
+    hold_equity += (start_cash/(len(tickers)))*((stats[n].iloc[7]/100)+1)
+equity = round(equity,2)
+print('Final Equity: ' + str(equity))
+print('Return: ' + str(((equity/start_cash)-1)*100) + '%')
+print('Buy and Hold Return: ' + str(((round(hold_equity,2)/start_cash)-1)*100) + '%')
 
 #stats, heatmap, optimize_result = bt.optimize(
 #    RSI_buy_weight = [0,200],
