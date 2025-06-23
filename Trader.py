@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import sambo
 import matplotlib.pyplot as plt
+import csv
 from sambo.plot import plot_objective
 from backtesting import Strategy
 from backtesting import Backtest
@@ -115,26 +116,21 @@ class golden_setup(Strategy):
                 self.position.close()
 
 
+def write_csv(stats):
+     base_stats = [ [ticker,stat[0:31]] for ticker, stat in stats]
+     data = pd.DataFrame({ticker: {k: v for k, v in stat.items()} for ticker, stat in base_stats})
+     data.to_csv('stats.csv')
+
 #LOOP OVER ALL STOCKS
 stats = []
 for ticker in tickers:
     ticker_data = dataF.xs(ticker,axis=1,level=1)
     bt = Backtest(ticker_data, golden_setup, cash=start_cash/len(tickers), commission=0.0,exclusive_orders=False,finalize_trades=True)
     ticker_stats = bt.run()
-    stats.append(ticker_stats)
-    bt.plot()
-print(stats)
+    stats.append([ticker, ticker_stats])
+    #bt.plot()
 
-#PRINT FINAL STOCKS
-equity = 0
-hold_equity = 0
-for n in range(len(tickers)):
-    equity += stats[n].iloc[4]
-    hold_equity += (start_cash/(len(tickers)))*((stats[n].iloc[7]/100)+1)
-equity = round(equity,2)
-print('Final Equity: ' + str(equity))
-print('Return: ' + str(((equity/start_cash)-1)*100) + '%')
-print('Buy and Hold Return: ' + str(((round(hold_equity,2)/start_cash)-1)*100) + '%')
+write_csv(stats)
 
 #stats, heatmap, optimize_result = bt.optimize(
 #    RSI_buy_weight = [0,200],
