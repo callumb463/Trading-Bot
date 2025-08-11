@@ -115,7 +115,7 @@ class Backtest:
         print(type(self.strategy.indicators))
         print(self.strategy.indicators.head)
 
-    def run_backtest(self, monte_carlo_iterations = False, mc_preserve_final_equity = True):
+    def run_backtest(self, monte_carlo_iterations = False, mc_replacement = False):
         self.monte_carlo_iterations = monte_carlo_iterations
         for date_index, row in self.strategy.indicators.iterrows():
             self.strategy.run(date_index, row)
@@ -126,17 +126,17 @@ class Backtest:
 
             self.equity.append(self.strategy.cash + asset_price)
         if self.monte_carlo_iterations is not False:
-            self.monte_carlo_data = self.monte_carlo(mc_preserve_final_equity, self.monte_carlo_iterations)
+            self.monte_carlo_data = self.monte_carlo(mc_replacement, self.monte_carlo_iterations)
 
 
-    def monte_carlo(self, preserve_final_equity, n=1000):
+    def monte_carlo(self, replacement, n=1000):
         if isinstance (self.df, pd.MultiIndex) and len(self.df.columns.levels[1]) > 1:
             print("Monte Carlo Simulation does not yet support multiple stocks")
         else:
             possible_equity_curves = []
             for i in range(0,n):
                 new_trade_equity = [self.strategy.starting_cash]
-                if preserve_final_equity == True:
+                if replacement == False:
                     new_trade_sample = random.sample(self.strategy.all_trades, k=len(self.strategy.all_trades))
                 else:
                     new_trade_sample = random.choices(self.strategy.all_trades,k = len(self.strategy.all_trades))
