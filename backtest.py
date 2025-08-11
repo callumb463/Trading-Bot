@@ -111,34 +111,35 @@ class Backtest:
         self.strategy = strategy
         self.spy_return = 0
         self.equity = []
-        self.cash = []
 
         print(type(self.strategy.indicators))
         print(self.strategy.indicators.head)
 
-    def run_backtest(self, monte_carlo_iterations = False):
+    def run_backtest(self, monte_carlo_iterations = False, mc_preserve_final_equity = True):
         self.monte_carlo_iterations = monte_carlo_iterations
         for date_index, row in self.strategy.indicators.iterrows():
             self.strategy.run(date_index, row)
-            ##COUNT ACTUAL EQUITY NOT JUST CASH
+
             asset_price = 0
             for trade_index, trade in self.strategy.open_trades.items():
                 asset_price += trade.price
 
-            self.cash.append(self.strategy.cash)
             self.equity.append(self.strategy.cash + asset_price)
         if self.monte_carlo_iterations is not False:
-            self.monte_carlo_data = self.monte_carlo(self.monte_carlo_iterations)
+            self.monte_carlo_data = self.monte_carlo(mc_preserve_final_equity, self.monte_carlo_iterations)
 
 
-    def monte_carlo(self, n=1000):
+    def monte_carlo(self, preserve_final_equity, n=1000):
         if isinstance (self.df, pd.MultiIndex) and len(self.df.columns.levels[1]) > 1:
             print("Monte Carlo Simulation does not yet support multiple stocks")
         else:
             possible_equity_curves = []
             for i in range(0,n):
                 new_trade_equity = [self.strategy.starting_cash]
-                new_trade_sample = random.sample(self.strategy.all_trades, k=len(self.strategy.all_trades))
+                if preserve_final_equity == True:
+                    new_trade_sample = random.sample(self.strategy.all_trades, k=len(self.strategy.all_trades))
+                else:
+                    new_trade_sample = random.choices(self.strategy.all_trades,k = len(self.strategy.all_trades))
                 for trade in new_trade_sample:
                     return_in_dollars = trade.price-trade.buy_price
                     new_trade_equity.extend([new_trade_equity[-1]]*trade.duration)
@@ -165,7 +166,6 @@ class Backtest:
         # Equity Plot
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=self.df.index, y = self.equity))
-        fig.add_trace(go.Scatter(x=self.df.index, y = self.cash))
         fig.update_layout(title='Equity', xaxis_title='Date', yaxis_title='Cash')
         fig.show()
 
