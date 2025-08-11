@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import random
 import chart_studio.plotly as py
 import plotly.express as px
 import cufflinks as cf
@@ -35,12 +36,8 @@ class Trade:
         self.is_closed = False
 
     def update(self, log_return = None, current_price = None):
-        if log_return is not None:
-            self.cum_log_return += log_return
-            self.price = self.price*np.exp(log_return)
-        elif current_price is not None:
-            self.cum_log_return += np.log(current_price/self.price)
-            self.price = current_price
+        self.cum_log_return += log_return
+        self.price = self.price*np.exp(log_return)
         self.duration += 1
     
     def close(self, sell_index, sell_date):
@@ -59,16 +56,14 @@ class Strategy:
         self.data = data
 
         self.indicators = pd.DataFrame(index=self.data.index)
-        self.indicator(log_return, self.data, names=['Log Return'])
+        self.indicator(log_return, self.data)
 
         self.all_trades = []
         self.open_trades = {}
     
-    def indicator(self, func: Callable, *args, names: List):
+    def indicator(self, func: Callable, *args):
         func_data = func(*args)
-        for name in names:
-            self.indicators[name] = func_data[names]
-        ## NEEDS TO HANDLE 2D DATA. MAYBE DITCH NUMPY IN FAVOR OF PANDAS
+        self.indicators = pd.concat([self.indicators, func_data], axis=1)
 
 
     def buy(self, buy_index, buy_price = None, portfolio_perc = None):
@@ -83,12 +78,12 @@ class Strategy:
                 self.all_trades.append(new_trade)
                 self.open_trades.update({buy_index: new_trade})
                 self.cash -= buy_price
+                
             else:
                 new_trade = Trade(buy_price=buy_price, buy_index=buy_index, buy_date=self.date)
                 self.all_trades.append(new_trade)
                 self.open_trades.update({buy_index: new_trade})
                 self.cash -= buy_price
-    
     def sell(self, sell_index):
         if sell_index in self.open_trades:
             sold_trade = self.open_trades.pop(sell_index)
@@ -98,10 +93,10 @@ class Strategy:
     def __str__(self):
         return (f'{self.indicators.shape[1]} indicator strategy with ${self.starting_cash}')
 
-    def run(self, index, row):
-        self.date = index
+    def run(self, date_index, row):
+        self.date = date_index
         for ticker, trade in self.open_trades.items():
-            trade.update(log_return=row['Log Return'])
+            trade.update(log_return=row[('Log Return','AAPL')])
         pass
 
 # BUY AND HOLD COMPARISON IS DIFFICULT FOR MULTIPLE STOCKS
@@ -116,16 +111,40 @@ class Backtest:
         self.strategy = strategy
         self.spy_return = 0
         self.equity = []
+        self.cash = []
 
-    def run_backtest(self):
-        for index, row in self.strategy.indicators.iterrows():
-            self.strategy.run(index, row)
+        print(type(self.strategy.indicators))
+        print(self.strategy.indicators.head)
+
+    def run_backtest(self, monte_carlo_iterations = False):
+        self.monte_carlo_iterations = monte_carlo_iterations
+        for date_index, row in self.strategy.indicators.iterrows():
+            self.strategy.run(date_index, row)
             ##COUNT ACTUAL EQUITY NOT JUST CASH
             asset_price = 0
-            for index, trade in self.strategy.open_trades.items():
+            for trade_index, trade in self.strategy.open_trades.items():
                 asset_price += trade.price
-        
+
+            self.cash.append(self.strategy.cash)
             self.equity.append(self.strategy.cash + asset_price)
+        if self.monte_carlo_iterations is not False:
+            self.monte_carlo_data = self.monte_carlo(self.monte_carlo_iterations)
+
+
+    def monte_carlo(self, n=1000):
+        if isinstance (self.df, pd.MultiIndex) and len(self.df.columns.levels[1]) > 1:
+            print("Monte Carlo Simulation does not yet support multiple stocks")
+        else:
+            possible_equity_curves = []
+            for i in range(0,n):
+                new_trade_equity = [self.strategy.starting_cash]
+                new_trade_sample = random.sample(self.strategy.all_trades, k=len(self.strategy.all_trades))
+                for trade in new_trade_sample:
+                    return_in_dollars = trade.price-trade.buy_price
+                    new_trade_equity.extend([new_trade_equity[-1]]*trade.duration)
+                    new_trade_equity.append(new_trade_equity[-1]+return_in_dollars)
+                possible_equity_curves.append(new_trade_equity)
+        return possible_equity_curves
 
     def visualize(self):
 
@@ -136,13 +155,17 @@ class Backtest:
         for trade in self.strategy.all_trades:
             if isinstance(trade, Trade):
                 fig.add_trace(go.Scatter(x=[trade.buy_date], y=[self.df['Close'][ticker][trade.buy_date]], mode='markers', marker=dict(size=10, color='green'),showlegend=False))
-                fig.add_trace(go.Scatter(x=[trade.sell_date], y=[self.df['Close'][ticker][trade.sell_date]], mode='markers', marker=dict(size=10, color='red'),showlegend=False))
+                if trade.sell_date is not None:
+                    fig.add_trace(go.Scatter(x=[trade.sell_date], y=[self.df['Close'][ticker][trade.sell_date]], mode='markers', marker=dict(size=10, color='red'),showlegend=False))
+                else:
+                    print('There are still open positions')
         fig.update_layout(title='Assets', xaxis_title='Date', yaxis_title='Price')
         fig.show()
 
         # Equity Plot
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=self.df.index, y = self.equity))
+        fig.add_trace(go.Scatter(x=self.df.index, y = self.cash))
         fig.update_layout(title='Equity', xaxis_title='Date', yaxis_title='Cash')
         fig.show()
 
@@ -156,6 +179,13 @@ class Backtest:
                     fig.add_trace(go.Scatter(x=[trade.sell_date], y=[((trade.price/trade.buy_price)-1)*100], mode='markers', marker=dict(size=10, color='red'),showlegend=False))
         fig.update_layout(title='Trades', xaxis=dict(title='Sell Date'), yaxis=dict(title='Return', ticksuffix='%', zeroline=True, zerolinecolor='black', zerolinewidth=2))
         fig.show()
+
+        if self.monte_carlo_iterations is not False:
+            fig = go.Figure()
+            for sim in self.monte_carlo_data:
+                fig.add_trace(go.Scatter(x=list(range(len(sim))), y=sim,showlegend=False))
+            fig.update_layout(title='Monte Carlo Simulations', xaxis=dict(title='Index'), yaxis=dict(title='Equity', ticksuffix='$', zeroline=True, zerolinecolor='black', zerolinewidth=2))
+            fig.show()
     # NEED TO WORK THIS OUT
 
     def __str__(self):
