@@ -112,8 +112,6 @@ class Backtest:
         self.spy_return = 0
         self.equity = []
 
-        print(type(self.strategy.indicators))
-        print(self.strategy.indicators.head)
 
     def run_backtest(self, monte_carlo_iterations = False, mc_replacement = False):
         self.monte_carlo_iterations = monte_carlo_iterations
@@ -155,18 +153,22 @@ class Backtest:
             fig.add_trace(go.Scatter(x=self.df.index, y=self.df['Close'][ticker],name=ticker))
         for trade in self.strategy.all_trades:
             if isinstance(trade, Trade):
-                fig.add_trace(go.Scatter(x=[trade.buy_date], y=[self.df['Close'][ticker][trade.buy_date]], mode='markers', marker=dict(size=10, color='green'),showlegend=False))
+                if trade.buy_price < 0:
+                    marker_symbol = 'x'
+                else:
+                    marker_symbol = 'circle'
+                fig.add_trace(go.Scatter(x=[trade.buy_date], y=[self.df['Close'][trade.buy_index][trade.buy_date]], mode='markers', marker=dict(size=10, symbol=marker_symbol, color='green', line=dict(width=1, color="Black")),showlegend=False))
                 if trade.sell_date is not None:
-                    fig.add_trace(go.Scatter(x=[trade.sell_date], y=[self.df['Close'][ticker][trade.sell_date]], mode='markers', marker=dict(size=10, color='red'),showlegend=False))
+                    fig.add_trace(go.Scatter(x=[trade.sell_date], y=[self.df['Close'][trade.buy_index][trade.sell_date]], mode='markers', marker=dict(size=10, symbol=marker_symbol, color='red', line=dict(width=1, color="Black")),showlegend=False))
                 else:
                     print('There are still open positions')
-        fig.update_layout(title='Assets', xaxis_title='Date', yaxis_title='Price')
+        fig.update_layout(title='Stock Prices', xaxis_title='Date', yaxis=dict(title='Return', ticksuffix='$'))
         fig.show()
 
         # Equity Plot
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=self.df.index, y = self.equity))
-        fig.update_layout(title='Equity', xaxis_title='Date', yaxis_title='Cash')
+        fig.update_layout(title='Equity', xaxis_title='Date',yaxis=dict(title='Return', ticksuffix='$'))
         fig.show()
 
         # Trade Plot
