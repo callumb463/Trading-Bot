@@ -96,7 +96,7 @@ class Strategy:
     def run(self, date_index, row):
         self.date = date_index
         for ticker, trade in self.open_trades.items():
-            trade.update(log_return=row[('Log Return','AAPL')])
+            trade.update(log_return=row[('Log Return',ticker)])
         pass
 
 # BUY AND HOLD COMPARISON IS DIFFICULT FOR MULTIPLE STOCKS
