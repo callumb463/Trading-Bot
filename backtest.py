@@ -111,10 +111,11 @@ class Backtest:
         self.strategy = strategy
         self.spy_return = 0
         self.equity = []
+        self.risk_free_rate = 1.0433
 
-
-    def run_backtest(self, monte_carlo_iterations = False, mc_replacement = False):
+    def run_backtest(self, monte_carlo_iterations = False, mc_replacement = False, duration = 10):
         self.monte_carlo_iterations = monte_carlo_iterations
+
         for date_index, row in self.strategy.indicators.iterrows():
             self.strategy.run(date_index, row)
 
@@ -123,6 +124,17 @@ class Backtest:
                 asset_price += trade.price
 
             self.equity.append(self.strategy.cash + asset_price)
+        
+        
+        return_list = [trade.price/trade.buy_price for trade in self.strategy.all_trades]
+        std_return = np.std(return_list)
+        portfolio_return = ((self.strategy.cash)/self.strategy.starting_cash)**(1/duration)
+        sharpe_ratio = (portfolio_return - self.risk_free_rate)/std_return
+        print(f'Return:{portfolio_return}')
+        print(f'Standard Dev:{std_return}')
+        print(f'Sharpe Ratio:{sharpe_ratio}')
+
+
         if self.monte_carlo_iterations is not False:
             self.monte_carlo_data = self.monte_carlo(mc_replacement, self.monte_carlo_iterations)
 
