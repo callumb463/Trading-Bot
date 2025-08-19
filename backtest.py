@@ -60,6 +60,7 @@ class Strategy:
 
         self.all_trades = []
         self.open_trades = {}
+        self.equity = []
     
     def indicator(self, func: Callable, *args):
         func_data = func(*args)
@@ -95,8 +96,17 @@ class Strategy:
 
     def run(self, date_index, row):
         self.date = date_index
+        asset_price = 0
         for ticker, trade in self.open_trades.items():
             trade.update(log_return=row[('Log Return',ticker)])
+            asset_price += trade.price
+        self.equity.append(self.cash + asset_price)
+
+        
+                
+
+            
+        
         pass
 
 # BUY AND HOLD COMPARISON IS DIFFICULT FOR MULTIPLE STOCKS
@@ -110,8 +120,7 @@ class Backtest:
         self.df = dataframe
         self.strategy = strategy
         self.spy_return = 0
-        self.equity = []
-        self.risk_free_rate = 1.0433
+        
 
     def run_backtest(self, monte_carlo_iterations = False, mc_replacement = False, duration = 10):
         self.monte_carlo_iterations = monte_carlo_iterations
@@ -119,21 +128,10 @@ class Backtest:
         for date_index, row in self.strategy.indicators.iterrows():
             self.strategy.run(date_index, row)
 
-            asset_price = 0
-            for trade_index, trade in self.strategy.open_trades.items():
-                asset_price += trade.price
+            
 
-            self.equity.append(self.strategy.cash + asset_price)
-        
-        
-        return_list = [trade.price/trade.buy_price for trade in self.strategy.all_trades]
-        std_return = np.std(return_list)
-        portfolio_return = ((self.strategy.cash)/self.strategy.starting_cash)**(1/duration)
-        sharpe_ratio = (portfolio_return - self.risk_free_rate)/std_return
-        print(f'Return:{portfolio_return}')
-        print(f'Standard Dev:{std_return}')
-        print(f'Sharpe Ratio:{sharpe_ratio}')
-
+        backtest_stats = Stat(strategy=self.strategy, duration=duration)
+        print(backtest_stats)
 
         if self.monte_carlo_iterations is not False:
             self.monte_carlo_data = self.monte_carlo(mc_replacement, self.monte_carlo_iterations)
@@ -179,7 +177,7 @@ class Backtest:
 
         # Equity Plot
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=self.df.index, y = self.equity))
+        fig.add_trace(go.Scatter(x=self.df.index, y = self.strategy.equity))
         fig.update_layout(title='Equity', xaxis_title='Date',yaxis=dict(title='Return', ticksuffix='$'))
         fig.show()
 
@@ -210,11 +208,26 @@ class Backtest:
 
 
 class Stat:
-    def __init__(self):
+    def __init__(self, strategy, duration):
         self.stats = pd.Series({key: None for key in ["Start", "End", "Duration", 
             "Initial Equity", "Final Equity", "Peak Equity",
             "Return", "Volatility", "Sharpe Ratio", "Max Drawdown", 
             "Number of Trades", "Win Rate", "Avg PNL"]})
+        
+        risk_free_rate = 1.0433
+        return_list = [((trade.price/trade.buy_price) - 1) for trade in strategy.all_trades]
+        return_array = ((np.array(strategy.equity)/np.array([np.nan] + strategy.equity[:-1]))-1)
+        volatility = np.std(return_array[~np.isnan(return_array)])
+        portfolio_return = ((strategy.cash)/strategy.starting_cash)**(1/duration)
+        sharpe_ratio = (portfolio_return - risk_free_rate)/volatility
+
+
+        self.stats["Initial Equity"] = strategy.starting_cash
+        self.stats['Final Equity'] = strategy.equity[-1]
+        self.stats['Return'] = portfolio_return
+        self.stats['Volatility'] = volatility
+        self.stats['Sharpe Ratio']= sharpe_ratio
+
     def __add__(self, other):
         if isinstance(other, Stat):
             new_stats = pd.Series()
@@ -242,7 +255,7 @@ class Stat:
             raise TypeError("Unsupported operand type for +")
         
     def __str__(self):
-        return self.stats
+        return str(self.stats)
         
 
 #TO IMPLEMENT:
